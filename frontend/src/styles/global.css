@@ -33,3 +33,9 @@ body { margin: 0; background: #f6f8fb; color: #1f2937; }
 .link { border: none; background: none; color: var(--brand); cursor: pointer; padding: 0; }
 .page-foot { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--muted); }
 .error-text { color: #b42318; }
+.notice-text { color: #175cd3; }
+.link:disabled { color: var(--muted); cursor: wait; }
+.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+.detail-item span { display: block; font-size: 12px; color: var(--muted); }
+.detail-item strong { font-size: 14px; }
+.detail-actions { display: flex; gap: 10px; margin: 12px 0; align-items: center; }
