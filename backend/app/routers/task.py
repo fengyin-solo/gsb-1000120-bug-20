@@ -6,7 +6,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
-from app.services.task import TaskService
+from app.services.task import (
+    OUTCOME_CONFLICT,
+    OUTCOME_INVALID,
+    OUTCOME_MISSING,
+    TaskService,
+)
 
 router = APIRouter(prefix="/api/task", tags=["检测任务"])
 
@@ -32,7 +37,7 @@ def list_entries(
 
 @router.get("/{entry_id}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
-    """读取单条检测任务单明细；不存在时给出可读的错误说明。"""
+    """读取单条检测任务单明细；与列表同一份状态口径，不存在时给出可读的错误说明。"""
     entry = service.get_entry(entry_id)
     if entry is None:
         raise HTTPException(status_code=404, detail=f"检测任务单 {entry_id} 不存在或已归档")
@@ -41,20 +46,27 @@ def get_entry(entry_id: int) -> dict:
 
 @router.post("", response_model=ActionResult)
 def create_entry(payload: EntryPayload) -> ActionResult:
-    """登记一条检测任务单，缺字段时说明原因而不是静默丢弃。"""
-    entry, missing = service.create_entry(payload.values)
-    if missing:
-        return ActionResult(ok=False, message=f"缺少必填字段：{'、'.join(missing)}")
+    """登记一条检测任务单，缺字段或任务编号重复时说明原因而不是静默丢弃。"""
+    entry, errors = service.create_entry(payload.values)
+    if errors:
+        return ActionResult(ok=False, message="；".join(errors))
     return ActionResult(ok=True, message="检测任务单已登记", entry=entry)
 
 
 @router.post("/{entry_id}/actions", response_model=ActionResult)
 def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
-    """对单条检测任务单执行分配任务、开始检测、提交复核；不允许的动作会被拦下并说明原因。"""
+    """对单条检测任务单执行分配任务、开始检测、提交复核。
+
+    重复提交按幂等成功处理；状态冲突返回 409 且记录未改动，前端刷新后可再次操作。
+    """
     action = str(payload.values.get("action") or "").strip()
-    entry, message = service.run_action(entry_id, action)
-    if entry is None:
-        return ActionResult(ok=False, message=message)
+    entry, message, outcome = service.run_action(entry_id, action)
+    if outcome == OUTCOME_MISSING:
+        raise HTTPException(status_code=404, detail=message)
+    if outcome == OUTCOME_INVALID:
+        raise HTTPException(status_code=400, detail=message)
+    if outcome == OUTCOME_CONFLICT:
+        raise HTTPException(status_code=409, detail=message)
     return ActionResult(ok=True, message=message, entry=entry)
 
 
